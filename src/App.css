@@ -17,3 +17,15 @@ a {
     text-decoration: none;
     color: white;
 }
+
+.canvas {
+    width: 100%;
+    height: 70vh;
+}
+
+.label {
+    text-align: center;
+    font-family: Inter;
+    font-size: larger;
+    font-weight: bold;
+}
