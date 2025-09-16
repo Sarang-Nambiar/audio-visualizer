@@ -1,1 +1,0 @@
-// Support for some three js libraries in typescript is lacking and hence using jsx

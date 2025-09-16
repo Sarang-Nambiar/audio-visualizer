@@ -1,3 +1,10 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+}
+
 .navbar {
     display: flex;
     width: 100%;
