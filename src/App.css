@@ -4,30 +4,3 @@
     justify-content: center;
     gap: 10px;
 }
-
-.navbar {
-    display: flex;
-    width: 100%;
-    justify-content: space-between;
-    align-items: center;
-    box-sizing: border-box;
-    padding: 1em 2.5em;
-}
-
-.nav-title {
-    font-size: 1.5em;
-    font-weight: bold;
-    font-family: Inter;
-}
-
-a {
-    text-decoration: none;
-    color: white;
-}
-
-.label {
-    text-align: center;
-    font-family: Inter;
-    font-size: larger;
-    font-weight: bold;
-}

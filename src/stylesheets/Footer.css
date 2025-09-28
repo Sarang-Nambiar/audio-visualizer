@@ -1,0 +1,12 @@
+.footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.label {
+    text-align: center;
+    font-family: Inter;
+    font-size: larger;
+    font-weight: bold;
+}
