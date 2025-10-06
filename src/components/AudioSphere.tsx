@@ -5,11 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from 'three';
 import "../stylesheets/AudioSphere.css"
 import { toast } from "react-toastify";
-import { audio } from "framer-motion/client";
-
-// Problems to fix 
-// 4. Is there an elegant way to make the icosahedron geometry pulsate with the spheres. 
-// 1. Making the vertex sphere stick to the main sphere vertices when it scales up and down
+import { ImprovedNoise } from "../utils/ImprovedNoise";
 
 function AudioSphere() {
     // State Variables
@@ -22,7 +18,9 @@ function AudioSphere() {
     const colorRGB: number[] = [0, 150, 255];
     const lightRef = useRef<THREE.AmbientLight>(undefined!);
     const [r, g, b]: number[] = colorRGB.map(x => x / 255)
-    const polygonArgs: [number, number] = [5, 7];
+    const polygonArgs: [number, number] = [5, 5];
+    const SPHERE_RADIUS = polygonArgs[0];
+    let verts = undefined;
 
     // Refs (to persist between re renders)
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -32,6 +30,8 @@ function AudioSphere() {
     const animationIdRef = useRef<number>(null);
     const vertexSphereRefs = useRef<THREE.Mesh[]>([]);
     const meshRef = useRef<THREE.Mesh>(null);
+    const noiseRef = useRef<ImprovedNoise>(new ImprovedNoise());
+    const originalPositionsRef = useRef<any>(null);
 
     const extractVertices = () => {
         const verticesArray: [number, number, number][] = [];
@@ -48,7 +48,44 @@ function AudioSphere() {
         setVertices(verticesArray);
     };
 
-    const updateVertexPositions = () => {
+    const updateVertexPositions = (normalizedAmp : number) => {
+        verts = meshRef.current?.geometry.attributes.position;
+        if (verts === undefined) return;
+
+        for(let i = 0; i < verts.array.length; i++) {
+            const x = originalPositionsRef.current[i * 3];
+            const y = originalPositionsRef.current[i * 3 + 1];
+            const z = originalPositionsRef.current[i * 3 + 2];
+
+            // Extracting the directional vector
+            const originalDistance = SPHERE_RADIUS;
+            const dirX = x / originalDistance;
+            const dirY = y / originalDistance;
+            const dirZ = z / originalDistance;
+            
+            const ns = noiseRef.current.noise(x, y, z);
+            
+            // ns ranges roughly from -1 to 1
+            // Removing all negative values
+            const normalizedNoise = ns * 2 - 1;
+            
+            // Base scale of 1.0 + audio influence + noise influence
+            // noise multiplied with amp to ensure that when the audio coming through is 0, then noise influence is also zero
+            // If the audio is feeble, effect of noise is low
+            // If audio is loud, then the impact of noise is high 
+            const scaleFactor = 1.0 + (normalizedAmp * 0.7) + (normalizedNoise * normalizedAmp * 0.5);
+            const newDistance = originalDistance * scaleFactor;
+
+            verts.setXYZ(
+                i, 
+                dirX * newDistance, 
+                dirY * newDistance, 
+                dirZ * newDistance
+            );
+        }
+    }
+
+    const updateMiniSpherePositions = () => {
         if (meshRef.current?.geometry && vertices.length > 0) {
             const positions = meshRef.current.geometry.attributes.position.array;
             const currentScale = meshRef.current.scale.x; // Assumes uniform scaling
@@ -64,19 +101,6 @@ function AudioSphere() {
             });
         }
     };
-
-    // const checkMicPermStatus = () => {
-    //     navigator.permissions.query({ name: "microphone" }).then((result) => {
-    //         if (result.state === "granted") {
-    //             setInitMic(true);
-    //         } else {
-    //             setInitMic(false);
-    //         }
-    //     }).catch((err) => {
-    //         // Add toast error
-    //         toast.error(`Error: Something went wrong - ${err}`);
-    //     });
-    // }
 
     const startMic = async () => {
         if (navigator.mediaDevices === undefined) {
@@ -139,31 +163,16 @@ function AudioSphere() {
         // Normalize the amplitude (0-255 range to 0-1 range)
         const normalizedAmp = average / 255;
 
-        // Scale the main sphere to make it pulse with the audio
-        const mainScale = 1.1 + (normalizedAmp * 1.5);
-        meshRef.current.scale.setScalar(mainScale);
+        updateVertexPositions(normalizedAmp); // Update main sphere vertices based on audio
+
+        meshRef.current.geometry.attributes.position.needsUpdate = true; // To update the mesh with the new positions of the vertices
 
         // Update the vertex sphere positions when the main sphere has scaled.
-        updateVertexPositions();
+        updateMiniSpherePositions();
 
-        // Animate vertex spheres based on different frequency ranges
-        // vertexSphereRefs.current.forEach((vertexMesh, index) => {
-        //     if (!vertexMesh) return;
-
-        //     const ampIndex = Math.floor((index / vertices.length) * audioData.length);
-        //     const amp = audioData[ampIndex] || 0;
-        //     const normalizedAmp = amp / 255;
-
-        //     // const vertexScale = 0.5 + (normalizedAmp * 2);
-        //     // vertexMesh.scale.setScalar(vertexScale);
-        // });
+        // Bring the vertices back to the original positions for the next animation loop
         animationIdRef.current = requestAnimationFrame(startVisualizing); // Requesting animation frame for next call
     };
-
-    const resetVisualizer = () => {
-        meshRef.current!.scale.setScalar(1); // Reset the scaling of the main sphere 
-        updateVertexPositions(); // Reset the vertex sphere positions
-    }
 
     const startVisualizingWithMic = async () => {
         const newVisualize = !visualize; // Toggle between visualization states
@@ -179,10 +188,21 @@ function AudioSphere() {
         }
     }
 
+    const resetVisualizer = () => {
+        if (!meshRef.current || !originalPositionsRef.current) return;
+        
+        verts = meshRef.current.geometry.attributes.position;
+        for (let i = 0; i < originalPositionsRef.current.length; i++) {
+            verts.array[i] = originalPositionsRef.current[i];
+        }
+        verts.needsUpdate = true;
+        updateMiniSpherePositions();
+    }
+
     useEffect(() => {
-        // checkMicPermStatus();
         if (meshRef.current) {
             extractVertices();
+            originalPositionsRef.current = new Float32Array(meshRef.current.geometry.attributes.position.array);
         }
     }, [meshLoaded]);
 
@@ -194,9 +214,10 @@ function AudioSphere() {
                     if (el) setMeshLoaded(true);
                 }} onClick={startVisualizingWithMic}
                     onPointerEnter={() => document.body.style.cursor = 'pointer'}
-                    onPointerLeave={() => document.body.style.cursor = 'auto'}>
+                    onPointerLeave={() => document.body.style.cursor = 'auto'}
+                >
                     <icosahedronGeometry args={[...polygonArgs]} />
-                    <meshStandardMaterial wireframe color={[r, g, b]} />
+                    <meshStandardMaterial color={[r, g, b]} wireframe />
                     {/* <directionalLight color="0xfff" position={[0, 2, 5]} /> */}
                 </mesh>
                 <ambientLight intensity={4} ref={lightRef} />
@@ -204,13 +225,19 @@ function AudioSphere() {
                     return (
                         <Select enabled key={idx}>
                             <mesh position={vertex} ref={el => vertexSphereRefs.current[idx] = el!}>
-                                <sphereGeometry args={[0.1, 32, 32]} />
-                                <meshStandardMaterial color={[r, g, b]} />
+                                <sphereGeometry args={[0.07, 32, 32]} />
+                                <meshStandardMaterial color={[r, g, b]} wireframe />
                             </mesh>
                         </Select>
                     );
                 })}
-                <OrbitControls enableDamping={true} enableZoom={false} enablePan={false} enableRotate={false} autoRotate />
+                <OrbitControls
+                    enableDamping={true}
+                    enableZoom={false}
+                    enablePan={false}
+                    enableRotate={false}
+                    autoRotate
+                />
                 <EffectComposer>
                     <SelectiveBloom
                         lights={[lightRef]}
