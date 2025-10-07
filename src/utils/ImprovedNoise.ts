@@ -17,19 +17,19 @@ for ( let i = 0; i < 256; i ++ ) {
 
 }
 
-function fade( t ) {
+function fade( t: number ) {
 
 	return t * t * t * ( t * ( t * 6 - 15 ) + 10 );
 
 }
 
-function lerp( t, a, b ) {
+function lerp( t: number, a: number, b: number ) {
 
 	return a + t * ( b - a );
 
 }
 
-function grad( hash, x, y, z ) {
+function grad( hash: number, x: number, y: number, z: number ) {
 
 	const h = hash & 15;
 	const u = h < 8 ? x : y, v = h < 4 ? y : h == 12 || h == 14 ? x : z;
@@ -39,7 +39,7 @@ function grad( hash, x, y, z ) {
 
 class ImprovedNoise {
 
-	noise( x, y, z ) {
+	noise( x: number, y: number, z: number ) {
 
 		const floorX = Math.floor( x ), floorY = Math.floor( y ), floorZ = Math.floor( z );
 

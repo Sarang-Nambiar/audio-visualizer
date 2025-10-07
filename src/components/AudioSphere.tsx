@@ -1,15 +1,19 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { EffectComposer, Select, SelectiveBloom } from "@react-three/postprocessing";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import * as THREE from 'three';
 import "../stylesheets/AudioSphere.css"
 import { toast } from "react-toastify";
 import { ImprovedNoise } from "../utils/ImprovedNoise";
+import { VisualizerContext } from "../App";
+import type { VisualizerState } from "../types/visual-types";
 
 function AudioSphere() {
+    // Shared state variables
+    const { visualize, setVisualize }: VisualizerState = useContext(VisualizerContext);
+
     // State Variables
-    const [visualize, setVisualize] = useState<boolean>(false);
     const [initMic, setInitMic] = useState<boolean>(false);
     const [vertices, setVertices] = useState<[number, number, number][]>([]);
     const [meshLoaded, setMeshLoaded] = useState<boolean>(false);
@@ -102,10 +106,11 @@ function AudioSphere() {
         }
     };
 
-    const startMic = async () => {
+    const startMic = async () : Promise<number> => {
         if (navigator.mediaDevices === undefined) {
             toast.error("Error: Your browser does not support microphone access.");
-            return;
+            setVisualize(false); // Resetting to default state 
+            return 1;
         }
 
         return navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -117,10 +122,12 @@ function AudioSphere() {
             const dataLength: (number | undefined) = analyzerRef.current?.frequencyBinCount;
             dataArrayRef.current = new Uint8Array(dataLength!);
             setInitMic(true);
+            return 0;
         }).catch((err) => {
             // Put the toast saying that microphone access is needed for this feature to work
             toast.error("Error: Microphone access is needed for this feature to work.")
-            throw err;
+            setVisualize(false); // Resetting to default state
+            return 1;
         })
     }
 
@@ -179,7 +186,8 @@ function AudioSphere() {
         setVisualize(newVisualize);
         if (newVisualize) {
             if (!initMic) {
-                await startMic();
+                const failed = await startMic();
+                if (failed) return; 
             }
             startVisualizing();
         } else {

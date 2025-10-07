@@ -3,14 +3,22 @@ import AudioSphere from './components/AudioSphere';
 import { ToastContainer } from 'react-toastify';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import { createContext, useState } from 'react';
+import type { AudioFileURL, VisualizerState } from './types/visual-types';
 
+const AudioURLContext = createContext<AudioFileURL>({
+  fileURL: '',
+  setFileURL: () => { },
+});
 
-// Flow:
-// 1. Have a navbar which contains the title and a text below the blob saying click to start audio visualizer(requires mic access)
-// 2. Connect the blob to this app
-// 3. Add the aforementioned text below the blob
+const VisualizerContext = createContext<VisualizerState>({
+  visualize: false,
+  setVisualize: () => { },
+})
 
 function App() {
+  const [fileURL, setFileURL] = useState<string>('');
+  const [visualize, setVisualize] = useState<boolean>(false);
   return (
     <div className='container'>
       <ToastContainer
@@ -25,10 +33,16 @@ function App() {
         theme="dark"
       />
       <Navbar />
-      <AudioSphere />
-      <Footer />
+      <VisualizerContext.Provider value={{ visualize, setVisualize }}>
+        <AudioURLContext.Provider value={{ fileURL, setFileURL }}>
+          <AudioSphere />
+          <Footer />
+        </AudioURLContext.Provider>
+
+      </VisualizerContext.Provider>
     </div>
   )
 }
 
-export default App
+export { VisualizerContext, AudioURLContext, type AudioFileURL, type VisualizerState };
+export default App;
