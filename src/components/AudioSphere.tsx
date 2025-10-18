@@ -6,12 +6,26 @@ import * as THREE from 'three';
 import "../stylesheets/AudioSphere.css"
 import { toast } from "react-toastify";
 import { ImprovedNoise } from "../utils/ImprovedNoise";
-import { VisualizerContext } from "../App";
-import type { VisualizerState } from "../types/visual-types";
+import { AudioURLContext, VisualizerContext } from "../App";
+import type { AudioFileURL, VisualizerState } from "../types/visual-types";
+
+const NOISE_WEIGHTS = {
+    "microphone": {
+        ampWeight: 0.7,
+        nsWeight: 0.6
+    },
+    "audio_file": {
+        ampWeight: 0.4,
+        nsWeight: 0.2
+    }
+}
+
+type AudioType = 'microphone' | 'audio_file';
 
 function AudioSphere() {
     // Shared state variables
     const { visualize, setVisualize }: VisualizerState = useContext(VisualizerContext);
+    const { fileURL, setFileURL }: AudioFileURL = useContext(AudioURLContext);
 
     // State Variables
     const [initMic, setInitMic] = useState<boolean>(false);
@@ -22,7 +36,7 @@ function AudioSphere() {
     const colorRGB: number[] = [0, 150, 255];
     const lightRef = useRef<THREE.AmbientLight>(undefined!);
     const [r, g, b]: number[] = colorRGB.map(x => x / 255)
-    const polygonArgs: [number, number] = [5, 5];
+    const polygonArgs: [number, number] = [5, 6];
     const SPHERE_RADIUS = polygonArgs[0];
     let verts = undefined;
 
@@ -34,8 +48,11 @@ function AudioSphere() {
     const animationIdRef = useRef<number>(null);
     const vertexSphereRefs = useRef<THREE.Mesh[]>([]);
     const meshRef = useRef<THREE.Mesh>(null);
+    const audioTypeRef = useRef<AudioType>('microphone');
     const noiseRef = useRef<ImprovedNoise>(new ImprovedNoise());
     const originalPositionsRef = useRef<any>(null);
+    const sourceRef = useRef<AudioBufferSourceNode | null>(null); // ref to the source node for upload audio
+    const clockRef = useRef<THREE.Clock>(new THREE.Clock())
 
     const extractVertices = () => {
         const verticesArray: [number, number, number][] = [];
@@ -53,6 +70,7 @@ function AudioSphere() {
     };
 
     const updateVertexPositions = (normalizedAmp: number) => {
+        const time = clockRef.current.getElapsedTime();
         verts = meshRef.current?.geometry.attributes.position;
         if (verts === undefined) return;
 
@@ -67,7 +85,7 @@ function AudioSphere() {
             const dirY = y / originalDistance;
             const dirZ = z / originalDistance;
 
-            const ns = noiseRef.current.noise(x, y, z);
+            const ns = noiseRef.current.noise(x, y, time);
 
             // ns ranges roughly from -1 to 1
             // Removing all negative values
@@ -77,7 +95,8 @@ function AudioSphere() {
             // noise multiplied with amp to ensure that when the audio coming through is 0, then noise influence is also zero
             // If the audio is feeble, effect of noise is low
             // If audio is loud, then the impact of noise is high 
-            const scaleFactor = 1.0 + (normalizedAmp * 0.7) + (normalizedNoise * normalizedAmp * 0.5);
+            const { ampWeight, nsWeight } = NOISE_WEIGHTS[audioTypeRef.current] 
+            const scaleFactor = 1.0 + (normalizedAmp * ampWeight) + (normalizedNoise * normalizedAmp * nsWeight);
             const newDistance = originalDistance * scaleFactor;
 
             verts.setXYZ(
@@ -107,6 +126,9 @@ function AudioSphere() {
     };
 
     const startMic = async (): Promise<number> => {
+        // Setting Audio Type
+        audioTypeRef.current = 'microphone';
+
         if (navigator.mediaDevices === undefined) {
             toast.error("Error: Your browser does not support microphone access.");
             setVisualize(false); // Resetting to default state 
@@ -131,7 +153,7 @@ function AudioSphere() {
         })
     }
 
-    const stopMic = () => {
+    const stopAudio = () => {
         if (animationIdRef.current) { // Stop the animation
             cancelAnimationFrame(animationIdRef.current);
         }
@@ -146,22 +168,28 @@ function AudioSphere() {
             audioContextRef.current.close();
         }
 
+        // Stopping any audio coming from the audio file uploaded
+        if (sourceRef.current) {
+            sourceRef.current.stop();
+            sourceRef.current.disconnect();
+        }
+
         audioContextRef.current = null;
         micRef.current = null;
         analyzerRef.current = null;
         dataArrayRef.current = null;
         animationIdRef.current = null;
+        sourceRef.current = null;
         setInitMic(false);
+        setFileURL('');
     }
 
     const startVisualizing = () => {
-        if (!analyzerRef.current || !dataArrayRef.current || !meshRef.current) {
-            console.log(analyzerRef)
-            console.log(dataArrayRef)
-            console.log(meshRef)
+        if (!analyzerRef.current || !dataArrayRef.current || !meshRef.current || (!micRef.current && !sourceRef.current)) {
             toast.error("Error: Unable to start visualization. Please try again.");
             return;
         }
+
         analyzerRef.current?.getByteFrequencyData(dataArrayRef.current!);
         const audioData = dataArrayRef.current!;
         let sum = 0;
@@ -190,7 +218,7 @@ function AudioSphere() {
                 const failed = await startMic();
                 if (failed) return;
             }
-        } 
+        }
         setVisualize(newVisualize);
     }
 
@@ -206,8 +234,38 @@ function AudioSphere() {
     }
 
     const stopVisualizing = () => {
-        stopMic();
+        stopAudio();
         resetVisualizer();
+    }
+
+    const initAudioSource = async () => {
+        // Setting Audio Type
+        audioTypeRef.current = 'audio_file';
+
+        const response = await fetch(fileURL);
+        const blob = await response.blob();
+        const arrayBuffer: ArrayBuffer = await blob.arrayBuffer();
+
+        audioContextRef.current = new AudioContext();
+        analyzerRef.current = audioContextRef.current?.createAnalyser();
+        analyzerRef.current.fftSize = 256;
+
+        const audioBuffer: AudioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+
+        sourceRef.current = audioContextRef.current.createBufferSource();
+        sourceRef.current.buffer = audioBuffer;
+        sourceRef.current.connect(analyzerRef.current);
+
+        const dataLength: (number | undefined) = analyzerRef.current?.frequencyBinCount;
+        dataArrayRef.current = new Uint8Array(dataLength!);
+
+        analyzerRef.current.connect(audioContextRef.current.destination); // To play the audio
+
+        // Playing audio from file rather than from mic
+        if (sourceRef.current && !micRef.current) {
+            audioContextRef.current?.resume();
+            sourceRef.current.start();
+        }
     }
 
     useEffect(() => {
@@ -224,6 +282,16 @@ function AudioSphere() {
             stopVisualizing();
         }
     }, [visualize])
+
+    useEffect(() => {
+        if (fileURL) {
+            initAudioSource().then(() => {
+                setVisualize(true);
+            }).catch((err) => {
+                toast.error(`There was an error: ${err}`);
+            });
+        }
+    }, [fileURL])
 
     return (
         <div className='canvas'>

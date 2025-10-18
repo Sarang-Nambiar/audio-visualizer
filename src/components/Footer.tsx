@@ -18,7 +18,6 @@ export default function Footer() {
                 toast.error('Something went wrong when accessing the uploaded audio file. Please try again.');
                 return;
             }
-            console.log(audioURL);
             setFileURL(audioURL);
         }
     }
@@ -27,10 +26,11 @@ export default function Footer() {
         <div className='footer'>
             <p className='label'>Click on the sphere to activate your microphone or upload a song of your choice below!</p>
             <FileUpload.Root
-                accept={["audio/mpeg"]}
+                accept={["audio/*"]}
                 maxFiles={1}
-                maxFileSize={1000000}
+                maxFileSize={10000000}
                 onFileAccept={handleFileAccept}
+                onFileReject={() => toast.error("Please provide an audio file(mp3, ogg, wav...) which is a maximum of 10MB in size.")}
             >
                 <FileUpload.HiddenInput />
                 <FileUpload.Trigger asChild>
@@ -42,7 +42,7 @@ export default function Footer() {
                         <MdAudioFile /> Upload file
                     </Button>
                 </FileUpload.Trigger>
-                <FileUpload.List />
+                {/* <FileUpload.List /> */}
             </FileUpload.Root>
         </div>
     ) : (
