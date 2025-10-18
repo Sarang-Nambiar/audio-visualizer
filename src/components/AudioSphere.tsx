@@ -52,11 +52,11 @@ function AudioSphere() {
         setVertices(verticesArray);
     };
 
-    const updateVertexPositions = (normalizedAmp : number) => {
+    const updateVertexPositions = (normalizedAmp: number) => {
         verts = meshRef.current?.geometry.attributes.position;
         if (verts === undefined) return;
 
-        for(let i = 0; i < verts.array.length; i++) {
+        for (let i = 0; i < verts.array.length; i++) {
             const x = originalPositionsRef.current[i * 3];
             const y = originalPositionsRef.current[i * 3 + 1];
             const z = originalPositionsRef.current[i * 3 + 2];
@@ -66,13 +66,13 @@ function AudioSphere() {
             const dirX = x / originalDistance;
             const dirY = y / originalDistance;
             const dirZ = z / originalDistance;
-            
+
             const ns = noiseRef.current.noise(x, y, z);
-            
+
             // ns ranges roughly from -1 to 1
             // Removing all negative values
             const normalizedNoise = ns * 2 - 1;
-            
+
             // Base scale of 1.0 + audio influence + noise influence
             // noise multiplied with amp to ensure that when the audio coming through is 0, then noise influence is also zero
             // If the audio is feeble, effect of noise is low
@@ -81,9 +81,9 @@ function AudioSphere() {
             const newDistance = originalDistance * scaleFactor;
 
             verts.setXYZ(
-                i, 
-                dirX * newDistance, 
-                dirY * newDistance, 
+                i,
+                dirX * newDistance,
+                dirY * newDistance,
                 dirZ * newDistance
             );
         }
@@ -106,7 +106,7 @@ function AudioSphere() {
         }
     };
 
-    const startMic = async () : Promise<number> => {
+    const startMic = async (): Promise<number> => {
         if (navigator.mediaDevices === undefined) {
             toast.error("Error: Your browser does not support microphone access.");
             setVisualize(false); // Resetting to default state 
@@ -156,6 +156,9 @@ function AudioSphere() {
 
     const startVisualizing = () => {
         if (!analyzerRef.current || !dataArrayRef.current || !meshRef.current) {
+            console.log(analyzerRef)
+            console.log(dataArrayRef)
+            console.log(meshRef)
             toast.error("Error: Unable to start visualization. Please try again.");
             return;
         }
@@ -177,28 +180,23 @@ function AudioSphere() {
         // Update the vertex sphere positions when the main sphere has scaled.
         updateMiniSpherePositions();
 
-        // Bring the vertices back to the original positions for the next animation loop
         animationIdRef.current = requestAnimationFrame(startVisualizing); // Requesting animation frame for next call
     };
 
     const startVisualizingWithMic = async () => {
         const newVisualize = !visualize; // Toggle between visualization states
-        setVisualize(newVisualize);
         if (newVisualize) {
             if (!initMic) {
                 const failed = await startMic();
-                if (failed) return; 
+                if (failed) return;
             }
-            startVisualizing();
-        } else {
-            stopMic();
-            resetVisualizer();
-        }
+        } 
+        setVisualize(newVisualize);
     }
 
     const resetVisualizer = () => {
         if (!meshRef.current || !originalPositionsRef.current) return;
-        
+
         verts = meshRef.current.geometry.attributes.position;
         for (let i = 0; i < originalPositionsRef.current.length; i++) {
             verts.array[i] = originalPositionsRef.current[i];
@@ -207,12 +205,25 @@ function AudioSphere() {
         updateMiniSpherePositions();
     }
 
+    const stopVisualizing = () => {
+        stopMic();
+        resetVisualizer();
+    }
+
     useEffect(() => {
         if (meshRef.current) {
             extractVertices();
             originalPositionsRef.current = new Float32Array(meshRef.current.geometry.attributes.position.array);
         }
     }, [meshLoaded]);
+
+    useEffect(() => {
+        if (visualize) {
+            startVisualizing();
+        } else {
+            stopVisualizing();
+        }
+    }, [visualize])
 
     return (
         <div className='canvas'>
