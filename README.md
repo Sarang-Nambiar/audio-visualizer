@@ -1,6 +1,6 @@
 # 🎧 Audio Visualizer
 
-![Uploading Screencast_20251020_011808.gif…]()
+![Screencast_20251020_011808](https://github.com/user-attachments/assets/95598dc1-47b2-4c53-9b28-a9d0271924ef)
 
 A **React-based 3D Audio Visualizer** that transforms sound either from an uploaded file or your microphone—into stunning, real-time visuals using **Three.js** and **React-Three-Fiber (R3F)**.
 
