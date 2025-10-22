@@ -145,7 +145,7 @@ function AudioSphere() {
             dataArrayRef.current = new Uint8Array(dataLength!);
             setInitMic(true);
             return 0;
-        }).catch((err) => {
+        }).catch(() => {
             // Put the toast saying that microphone access is needed for this feature to work
             toast.error("Error: Microphone access is needed for this feature to work.")
             setVisualize(false); // Resetting to default state
